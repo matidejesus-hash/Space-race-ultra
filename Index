@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Super Iván, Pedro y Rambo - Mobile</title>
+    <style>
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Arial Black', sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
+        canvas { background: #4ec0ca; max-width: 100%; max-height: 100%; object-fit: contain; border: 2px solid #fff; }
+        
+        /* Contenedores de Interfaz */
+        .overlay { position: absolute; width: 400px; height: 600px; pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; color: white; }
+        #pantallaInicio, .menu-container { position: absolute; width: 400px; height: 600px; background: #000; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; border: 4px solid #fff; }
+        #pantallaInicio img { width: 100%; height: 100%; object-fit: contain; }
+        
+        .btn { background: #444; color: white; border: 3px solid #fff; padding: 15px; margin: 10px; cursor: pointer; font-family: 'Arial Black', sans-serif; font-size: 18px; width: 250px; pointer-events: auto; }
+        #vidas-container { position: absolute; top: 15px; left: 15px; display: flex; gap: 5px; }
+        #puntos-box { position: absolute; top: 15px; right: 15px; text-align: right; }
+        #timer-especial { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); padding: 5px 15px; border-radius: 20px; display: none; border: 2px solid #fff; font-size: 14px; }
+        
+        #cartelUpss, #cartelRecord { position: absolute; width: 400px; height: 600px; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 50; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="pantallaInicio" onclick="quitarInicio()">
+        <img src="inicio.jpg" alt="Tap to Start">
+    </div>
+
+    <div id="menuPersonaje" class="menu-container" style="display:none;">
+        <h1>¿QUIÉN VUELA?</h1>
+        <button class="btn" onclick="elegirPersonaje('Iván')">SUPER IVÁN</button>
+        <button class="btn" onclick="elegirPersonaje('Pedro')">SUPER PEDRO</button>
+        <button class="btn" onclick="elegirPersonaje('Rambo')">SUPER RAMBO</button>
+    </div>
+
+    <div id="menuDificultad" class="menu-container" style="display:none;">
+        <h1 id="tituloDificultad">NIVEL</h1>
+        <button class="btn" onclick="iniciar(0)" style="color:#ffeb3b">PRÁCTICA</button>
+        <button class="btn" onclick="iniciar(1)" style="color:#4caf50">NOOB</button>
+        <button class="btn" onclick="iniciar(2)" style="color:#2196f3">PRO</button>
+        <button class="btn" onclick="iniciar(4)" style="color:#ff5252">GOD</button>
+    </div>
+
+    <div id="ui" class="overlay">
+        <div id="vidas-container">
+            <span id="v1" class="corazon">❤️</span>
+            <span id="v2" class="corazon">❤️</span>
+            <span id="v3" class="corazon">❤️</span>
+        </div>
+        <div id="puntos-box">
+            <div id="puntos" style="font-size: 20px;">Puntos: 0</div>
+            <div id="record" style="font-size: 12px; color: #ffeb3b;">Record: 0</div>
+        </div>
+        <div id="timer-especial"></div>
+    </div>
+
+    <div id="cartelUpss">
+        <div style="font-size: 50px; color: #ffeb3b; text-shadow: 4px 4px #f00;">¡Upss!</div>
+    </div>
+
+    <canvas id="juego"></canvas>
+
+<script>
+    const canvas = document.getElementById('juego');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 400; canvas.height = 600;
+
+    // --- CARGA DE ASSETS (Igual que tu original) ---
+    const imgIvan = new Image(); imgIvan.src = 'ivan.png';
+    const imgPedro = new Image(); imgPedro.src = 'pedro.png';
+    const imgRambo = new Image(); imgRambo.src = 'rambo.png';
+    const imgHuesito = new Image(); imgHuesito.src = 'huesito.png';
+    const imgRayo = new Image(); imgRayo.src = 'rayo Ivan.png'; 
+    const imgKetchup = new Image(); imgKetchup.src = 'ketchup.png'; 
+    const imgFondo = new Image(); imgFondo.src = 'fondo.jpg';
+    const imgNave = new Image(); imgNave.src = 'nave.png'; 
+    const imgBota = new Image(); imgBota.src = 'bota.png';
+    const imgKit = new Image(); imgKit.src = 'kit.png';
+    const imgNitro = new Image(); imgNitro.src = 'nitro.png';
+    const imgMetralla = new Image(); imgMetralla.src = 'metralla.png';
+    const imgJefe = new Image(); imgJefe.src = 'jefe1.png';
+
+    // Audio
+    const musicaFondo = new Audio('musica.mp3'); musicaFondo.loop = true;
+    const musicaJefe = new Audio('jefe1musica.mp3'); musicaJefe.loop = true;
+    const sonidoMuerte = new Audio('muerte.mp3');
+    const sonidoLadrido = new Audio('ladrido.mp3');
+
+    // Variables de Juego
+    let neneX = 50, neneY = 300, neneSize = 70;
+    let velY = 0, gravedad = 0.35, salto = -7.2;
+    let score = 0, activo = false, frame = 0, vidas = 3;
+    let highscore = localStorage.getItem('hs_space_race') || 0;
+    let tuberias = [], navesEnemigas = [], lasers = [], items = [], estelaNitro = [];
+    let neneActual = "Iván", dificultad = 1, timerNitro = 0, timerMetralla = 0, timerPoder = 0, invulnerable = 0;
+    let jefe = { activo: false, x: 450, y: 200, w: 180, h: 140, hp: 10, maxHp: 10, balas: [], muriendo: false };
+
+    document.getElementById('record').innerText = "Record: " + highscore;
+
+    // --- CONTROLES MÓVILES ---
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!activo) return;
+        let touch = e.touches[0];
+        let rect = canvas.getBoundingClientRect();
+        let x = (touch.clientX - rect.left) / (rect.right - rect.left) * canvas.width;
+        
+        if (x < canvas.width / 2) saltar();
+        else disparar();
+    }, {passive: false});
+
+    function saltar() { if(activo) velY = salto; }
+    
+    function disparar() {
+        if (!activo) return;
+        if (neneActual === "Rambo") { sonidoLadrido.currentTime = 0; sonidoLadrido.play().catch(()=>{}); }
+        let imgP = (neneActual === "Iván") ? imgRayo : (neneActual === "Pedro" ? imgKetchup : imgHuesito);
+        let wP = (neneActual === "Iván") ? 40 : 35;
+        let hP = (neneActual === "Iván") ? 4 : 35;
+        lasers.push({ x: neneX + neneSize, y: neneY + neneSize/2, w: wP, h: hP, img: imgP, rot: 0 });
+    }
+
+    function quitarInicio() {
+        musicaFondo.play().then(() => { musicaFondo.volume = 0.5; }).catch(() => {});
+        document.getElementById('pantallaInicio').style.display = 'none';
+        document.getElementById('menuPersonaje').style.display = 'flex';
+    }
+
+    function elegirPersonaje(nombre) {
+        neneActual = nombre;
+        document.getElementById('menuPersonaje').style.display = 'none';
+        document.getElementById('menuDificultad').style.display = 'flex';
+    }
+
+    function iniciar(nivel) {
+        dificultad = nivel;
+        document.getElementById('menuDificultad').style.display = 'none';
+        activo = true; score = 0; vidas = 3; neneY = 300; velY = 0;
+        tuberias = []; navesEnemigas = []; lasers = []; items = [];
+        jefe.activo = false; jefe.hp = 10 + (nivel * 5);
+        actualizarVidasUI();
+    }
+
+    function chocar() {
+        if (invulnerable > 0 || timerNitro > 0 || dificultad === 0) return;
+        vidas--;
+        invulnerable = 60;
+        actualizarVidasUI();
+        if (vidas <= 0) morir();
+    }
+
+    function morir() {
+        activo = false;
+        sonidoMuerte.play().catch(()=>{});
+        document.getElementById('cartelUpss').style.display = 'flex';
+        setTimeout(() => {
+            document.getElementById('cartelUpss').style.display = 'none';
+            document.getElementById('pantallaInicio').style.display = 'flex';
+        }, 2000);
+    }
+
+    function actualizarVidasUI() {
+        for(let i=1; i<=3; i++) document.getElementById('v' + i).innerText = (i <= vidas) ? "❤️" : "🖤";
+    }
+
+    function loop() {
+        ctx.fillStyle = "#4ec0ca";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (imgFondo.complete) ctx.drawImage(imgFondo, 0, 0, canvas.width, canvas.height);
+
+        if (activo) {
+            frame++;
+            velY += gravedad;
+            neneY += velY;
+
+            // --- LÍMITES DE PANTALLA ---
+            if (neneY < 0) { neneY = 0; velY = 0; }
+            if (neneY > canvas.height - neneSize) chocar();
+
+            let velGlobal = 2 + (dificultad * 0.8);
+
+            // Generar Obstáculos
+            if (!jefe.activo) {
+                if (frame % 120 === 0) tuberias.push({ x: canvas.width, y: Math.random()*250 + 50, h: 200, p: false });
+                if (frame % 180 === 0) navesEnemigas.push({ x: canvas.width, y: Math.random()*500, w: 70, h: 40 });
+            }
+
+            // Mover y Dibujar Tuberías
+            tuberias.forEach((t, i) => {
+                t.x -= velGlobal;
+                ctx.fillStyle = "#73bf2e";
+                ctx.fillRect(t.x, 0, 60, t.y);
+                ctx.fillRect(t.x, t.y + t.h, 60, canvas.height);
+                if (neneX + 50 > t.x && neneX < t.x + 60 && (neneY < t.y || neneY + 50 > t.y + t.h)) chocar();
+                if (!t.p && t.x < neneX) { t.p = true; score++; document.getElementById('puntos').innerText = "Puntos: " + score; }
+                if (t.x < -60) tuberias.splice(i, 1);
+            });
+
+            // Mover y Dibujar Naves
+            navesEnemigas.forEach((n, i) => {
+                n.x -= velGlobal + 2;
+                if (imgNave.complete) ctx.drawImage(imgNave, n.x, n.y, n.w, n.h);
+                if (neneX + 50 > n.x && neneX < n.x + n.w && neneY + 50 > n.y && neneY < n.y + n.h) chocar();
+                if (n.x < -80) navesEnemigas.splice(i, 1);
+            });
+
+            // Mover y Dibujar Lasers
+            lasers.forEach((l, i) => {
+                l.x += 12;
+                if (l.img.complete) ctx.drawImage(l.img, l.x, l.y, l.w, l.h);
+                navesEnemigas.forEach((n, ni) => {
+                    if (l.x < n.x + n.w && l.x + l.w > n.x && l.y > n.y && l.y < n.y + n.h) {
+                        navesEnemigas.splice(ni, 1);
+                        lasers.splice(i, 1);
+                        score += 2;
+                    }
+                });
+                if (l.x > canvas.width) lasers.splice(i, 1);
+            });
+
+            if (invulnerable > 0) invulnerable--;
+
+            // Dibujar Personaje
+            let img = (neneActual === "Iván") ? imgIvan : (neneActual === "Pedro") ? imgPedro : imgRambo;
+            if (img.complete && (invulnerable % 10 < 5)) {
+                ctx.drawImage(img, neneX, neneY, neneSize, neneSize);
+            }
+        }
+
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>
