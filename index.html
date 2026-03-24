@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Race ULTRA - Mobile</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #000; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            overflow: hidden; 
+            font-family: 'Arial Black', sans-serif; 
+            /* Evita que el usuario seleccione texto o aparezcan menús al mantener presionado */
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        canvas { 
+            background: #4ec0ca; 
+            max-width: 100vw; 
+            max-height: 100vh; 
+            object-fit: contain;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        /* Ajuste de los contenedores para que no se desfasen en móviles */
+        #ui, #pantallaInicio, .menu-container, #cartelUpss, #cartelRecord {
+            position: absolute;
+            width: 400px;
+            height: 600px;
+            pointer-events: none;
+            z-index: 5;
+        }
+        #pantallaInicio, .menu-container { pointer-events: auto; }
+        
+        #pantallaInicio { background: #000; z-index: 100; display: flex; justify-content: center; align-items: center; cursor: pointer; border: 4px solid #fff; }
+        #pantallaInicio img { width: 100%; height: 100%; object-fit: contain; }
+        .menu-container { background: rgba(0,0,0,0.95); display: none; flex-direction: column; justify-content: center; align-items: center; color: white; border: 4px solid #fff; }
+        
+        .btn { background: #444; color: white; border: 3px solid #fff; padding: 15px; margin: 8px; cursor: pointer; font-family: 'Arial Black', sans-serif; font-size: 18px; width: 80%; pointer-events: auto; }
+        
+        #vidas-container { position: absolute; top: 15px; left: 15px; display: flex; gap: 5px; }
+        .corazon { font-size: 28px; text-shadow: 3px 3px #000; }
+        #puntos-box { position: absolute; top: 15px; right: 15px; text-align: right; color: white; }
+        #timer-especial { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 18px; padding: 5px 15px; border-radius: 20px; display: none; background: rgba(0,0,0,0.7); border: 2px solid #fff; z-index: 30; }
+    </style>
+</head>
+<body>
+
+    <div id="pantallaInicio" onclick="quitarInicio()">
+        <img src="inicio.jpg" alt="Start Game">
+    </div>
+
+    <div id="menuPersonaje" class="menu-container">
+        <h1>¿QUIÉN VUELA?</h1>
+        <button class="btn" onclick="elegirPersonaje('Iván')">SUPER IVÁN</button>
+        <button class="btn" onclick="elegirPersonaje('Pedro')">SUPER PEDRO</button>
+        <button class="btn" onclick="elegirPersonaje('Rambo')">SUPER RAMBO</button>
+    </div>
+
+    <div id="menuDificultad" class="menu-container">
+        <h1 id="tituloDificultad">NIVEL</h1>
+        <button class="btn" onclick="iniciar(0)" style="color:#ffeb3b">PRÁCTICA</button>
+        <button class="btn" onclick="iniciar(1)" style="color:#4caf50">NOOB</button>
+        <button class="btn" onclick="iniciar(2)" style="color:#2196f3">PRO</button>
+        <button class="btn" onclick="iniciar(3)" style="color:#9c27b0">HACKER</button>
+    </div>
+
+    <div id="ui">
+        <div id="puntos-box">
+            <div id="puntos">Puntos: 0</div>
+            <div id="record" style="font-size: 12px; color: #ffeb3b;">Record: 0</div>
+        </div>
+        <div id="vidas-container">
+            <span id="v1" class="corazon">❤️</span>
+            <span id="v2" class="corazon">❤️</span>
+            <span id="v3" class="corazon">❤️</span>
+        </div>
+    </div>
+
+    <div id="timer-especial"></div>
+    <canvas id="juego"></canvas>
+
+<script>
+    // --- LÓGICA DEL JUEGO (Mantenemos tu estructura original con ajustes táctiles) ---
+    const canvas = document.getElementById('juego');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 400; canvas.height = 600;
+
+    // Assets (Igual que los tuyos)
+    const imgIvan = new Image(); imgIvan.src = 'ivan.png';
+    const imgPedro = new Image(); imgPedro.src = 'pedro.png';
+    const imgRambo = new Image(); imgRambo.src = 'rambo.png';
+    const imgRayo = new Image(); imgRayo.src = 'rayo Ivan.png'; // Usando tu asset del rayo
+    const imgHuesito = new Image(); imgHuesito.src = 'huesito.png';
+    const imgKetchup = new Image(); imgKetchup.src = 'ketchup.png';
+    const imgNave = new Image(); imgNave.src = 'nave.png';
+    const imgFondo = new Image(); imgFondo.src = 'fondo.jpg';
+
+    // Variables de estado
+    let neneX = 50, neneY = 300, neneSize = 70;
+    let velY = 0, gravedad = 0.35, salto = -7.2;
+    let score = 0, activo = false, frame = 0, vidas = 3;
+    let neneActual = "Iván", dificultad = 1;
+    let lasers = [], navesEnemigas = [], items = [];
+
+    // --- CONTROLES TÁCTILES ---
+    canvas.addEventListener('touchstart', function(e) {
+        e.preventDefault(); // Evita scroll y zoom
+        if (!activo) return;
+
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const touchX = (touch.clientX - rect.left) / (rect.right - rect.left) * canvas.width;
+
+        // Si toca la mitad izquierda salta, si toca la derecha dispara
+        if (touchX < canvas.width / 2) {
+            saltar();
+        } else {
+            disparar();
+        }
+    }, {passive: false});
+
+    function saltar() { velY = salto; }
+    
+    function disparar() {
+        let imgP = (neneActual === "Iván") ? imgRayo : (neneActual === "Pedro" ? imgKetchup : imgHuesito);
+        lasers.push({ x: neneX + neneSize, y: neneY + neneSize/2, w: 40, h: 10, img: imgP });
+    }
+
+    // Funciones de inicio (Simplificadas para el ejemplo)
+    function quitarInicio() {
+        document.getElementById('pantallaInicio').style.display = 'none';
+        document.getElementById('menuPersonaje').style.display = 'flex';
+    }
+
+    function elegirPersonaje(nombre) {
+        neneActual = nombre;
+        document.getElementById('menuPersonaje').style.display = 'none';
+        document.getElementById('menuDificultad').style.display = 'flex';
+    }
+
+    function iniciar(nivel) {
+        dificultad = nivel;
+        document.getElementById('menuDificultad').style.display = 'none';
+        activo = true;
+        // Reiniciar variables...
+    }
+
+    function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (imgFondo.complete) ctx.drawImage(imgFondo, 0, 0, canvas.width, canvas.height);
+
+        if (activo) {
+            velY += gravedad;
+            neneY += velY;
+
+            // Dibujar personaje
+            let img = (neneActual === "Iván") ? imgIvan : (neneActual === "Pedro") ? imgPedro : imgRambo;
+            if (img.complete) ctx.drawImage(img, neneX, neneY, neneSize, neneSize);
+
+            // Mover lasers
+            lasers.forEach((l, i) => {
+                l.x += 10;
+                if (l.img.complete) ctx.drawImage(l.img, l.x, l.y, l.w, l.h);
+                if (l.x > canvas.width) lasers.splice(i, 1);
+            });
+
+            if (neneY > canvas.height || neneY < 0) activo = false; 
+        }
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>
